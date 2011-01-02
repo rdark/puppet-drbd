@@ -4,6 +4,9 @@ resource <%= name %> {
   device    <%= device %>;
   disk      <%= disk %>;
   meta-disk internal;
+  syncer {
+    verify-alg md5;
+  }
 
   net {
     cram-hmac-alg sha1;

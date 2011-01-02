@@ -41,6 +41,7 @@ Example usage:
     ip2    => "192.168.1.11", # alice's IP
     disk   => "/dev/vg0/my-drbd-lv",
     secret => "foobar",
+    manageFirewall => "no"
   }
 
 See also:
@@ -48,7 +49,7 @@ See also:
  - drbd.conf(5)
 
 */
-define drbd::resource ($host1, $host2, $ip1, $ip2, $port='7789', $secret, $disk, $device='/dev/drbd0', $protocol='C', $manage='true') {
+define drbd::resource ($host1, $host2, $ip1, $ip2, $port='7789', $secret, $disk, $device='/dev/drbd0', $protocol='C', $manage='true', $manageFirewall='false') {
 
   drbd::config { "ZZZ-resource-${name}":
     content => template("drbd/drbd.conf.erb"),
@@ -58,6 +59,7 @@ define drbd::resource ($host1, $host2, $ip1, $ip2, $port='7789', $secret, $disk,
 
     # create metadata on device, except if resource seems already initalized.
     exec { "intialize DRBD metadata for $name":
+      path => "/sbin:/usr/sbin:/usr/bin:/bin",
       command => "drbdadm create-md $name",
       onlyif  => "test -e $disk",
       unless  => "drbdadm dump-md $name || (drbdadm cstate $name | egrep -q '^Connected')",
@@ -69,6 +71,7 @@ define drbd::resource ($host1, $host2, $ip1, $ip2, $port='7789', $secret, $disk,
     }
 
     exec { "enable DRBD resource $name":
+      path => "/sbin:/usr/sbin:/usr/bin:/bin",
       command => "drbdadm up $name",
       onlyif  => "drbdadm dstate $name | egrep -q '^Diskless/|^Unconfigured'",
       before  => Service["drbd"],
@@ -80,18 +83,24 @@ define drbd::resource ($host1, $host2, $ip1, $ip2, $port='7789', $secret, $disk,
 
   }
 
-  iptables { "allow drbd from $host1 on port $port":
-    proto  => "tcp",
-    dport  => $port,
-    source => $ip1,
-    jump   => "ACCEPT",
-  }
+  # TODO - when iptables module is created, integrate it with this for nodes that are running iptables
+  # needs to not be applied to those nodes NOT running iptables
 
-  iptables { "allow drbd from $host2 on port $port":
-    proto  => "tcp",
-    dport  => $port,
-    source => $ip2,
-    jump   => "ACCEPT",
-  }
+    if $manageFirewall == 'true' {
+
+        iptables { "allow drbd from $host1 on port $port":
+            proto  => "tcp",
+            dport  => $port,
+            source => $ip1,
+            jump   => "ACCEPT",
+        }
+    
+        iptables { "allow drbd from $host2 on port $port":
+            proto  => "tcp",
+            dport  => $port,
+            source => $ip2,
+            jump   => "ACCEPT",
+        }
+    }
 
 }
